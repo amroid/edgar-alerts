@@ -1,0 +1,40 @@
+name: Check EDGAR
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # every 15 minutes
+  workflow_dispatch:           # lets you trigger manually from the Actions tab
+
+permissions:
+  contents: write              # needed to commit state back
+
+concurrency:
+  group: edgar-check
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run check
+        env:
+          EDGAR_USER_AGENT: ${{ secrets.EDGAR_USER_AGENT }}
+          PUSHOVER_TOKEN: ${{ secrets.PUSHOVER_TOKEN }}
+          PUSHOVER_USER: ${{ secrets.PUSHOVER_USER }}
+        run: python check_edgar.py
+
+      - name: Commit state if changed
+        run: |
+          if [[ -n "$(git status --porcelain last_seen.txt)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add last_seen.txt
+            git commit -m "Update last_seen state [skip ci]"
+            git push
+          fi
